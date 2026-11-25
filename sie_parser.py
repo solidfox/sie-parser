@@ -27,6 +27,7 @@ __author__ = "Your Name"
 __email__ = "your.email@example.com"
 
 import re
+import zlib
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, TextIO, Union
 from datetime import datetime
@@ -187,6 +188,7 @@ class SieFile:
     objects: Dict[str, SieObject] = field(default_factory=dict)
     metadata: Dict[str, str] = field(default_factory=dict)
     removed_entries: List[SieEntry] = field(default_factory=list)  # #BTRANS rows
+    control_sum: Optional[int] = None  # verified #KSUMMA CRC-32, None if the file has none
 
 
 # Utility Functions
@@ -283,6 +285,118 @@ def _extract_quoted_value(line: str) -> str:
     return match.group(1) if match else ""
 
 
+# Items whose fields include an object list in braces (SIE 4B)
+_OBJECT_LIST_ITEMS = ('#TRANS', '#RTRANS', '#BTRANS', '#OIB', '#OUB', '#PSALDO', '#PBUDGET')
+
+
+def _sie_fields(line: str) -> List[str]:
+    """Split an item on SIE field separators (spaces and tabs only), ignoring quotes."""
+    return [f for f in re.split(r'[ \t]+', line) if f]
+
+
+def _ksumma_text(line: str) -> str:
+    """Return the characters of one item that count toward the #KSUMMA control sum.
+
+    SIE 4B section 10: the item label and the fields count. Spaces and tabs
+    between fields, the quotation marks around fields and the braces around
+    object lists and voucher blocks do not. An escaped quotation mark
+    (backslash + quote) counts as just the quotation mark, in any field.
+    Other braces (``#KONTO 1910 {Kassa}``) are part of the field.
+
+    Raises:
+        ValueError: If the item ends inside a quoted field.
+    """
+    if line.strip(' \t') in ('{', '}'):
+        return ''  # voucher block delimiter
+    label = _sie_fields(line)[:1]
+    has_object_list = bool(label) and label[0] in _OBJECT_LIST_ITEMS
+    out = []
+    in_quotes = False
+    open_lists = 0  # object-list braces opened on this line and not yet closed
+    list_seen = False  # an item has at most one object list: its first '{' field
+    i = 0
+    while i < len(line):
+        char = line[i]
+        if char == '\\' and line[i + 1:i + 2] == '"':
+            out.append('"')
+            i += 2
+            continue
+        if in_quotes:
+            if char == '"':
+                in_quotes = False
+            else:
+                out.append(char)
+        elif char == '"':
+            in_quotes = True
+        elif char in ' \t':
+            pass
+        elif (char == '{' and has_object_list and not list_seen
+              and (i == 0 or line[i - 1] in ' \t')):
+            open_lists += 1
+            list_seen = True
+        elif char == '}' and open_lists:
+            open_lists -= 1
+        else:
+            out.append(char)
+        i += 1
+    if in_quotes:
+        raise ValueError("unterminated quoted field")
+    return ''.join(out)
+
+
+def _verify_ksumma(lines: List[str]) -> Optional[int]:
+    """Check the #KSUMMA control sum (SIE 4B section 10) and return it.
+
+    Returns None when the file has no #KSUMMA. Otherwise the file must have an
+    introductory #KSUMMA and a final #KSUMMA <crc> as its last item, and the
+    CRC-32 of the CP437 bytes of every item between them must match.
+
+    Raises:
+        SieParseError: If the control sum is missing, malformed or wrong.
+    """
+    ksumma = [(i, _sie_fields(line)) for i, line in enumerate(lines)
+              if _sie_fields(line)[:1] == ['#KSUMMA']]
+    if not ksumma:
+        return None
+    (start, start_fields) = ksumma[0]
+    if len(start_fields) != 1:
+        raise SieParseError("The first #KSUMMA must have no value", start + 1, lines[start])
+    if any(_sie_fields(line)[:1] not in ([], ['#FLAGGA']) for line in lines[:start]):
+        raise SieParseError("Items before the opening #KSUMMA are not covered by the control sum",
+                            start + 1, lines[start])
+    if len(ksumma) < 2:
+        raise SieParseError("#KSUMMA control sum missing at end of file (file truncated?)")
+    (end, end_fields) = ksumma[1]
+    value = end_fields[1] if len(end_fields) == 2 else ''
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        value = value[1:-1]  # SIE fields may be quoted
+    if len(ksumma) > 2 or not re.fullmatch(r'[0-9]{1,10}', value) or int(value) > 0xFFFFFFFF:
+        line_num = ksumma[2][0] if len(ksumma) > 2 else end
+        raise SieParseError("Malformed #KSUMMA control sum", line_num + 1, lines[line_num])
+    if any(_sie_fields(line) for line in lines[end + 1:]):
+        raise SieParseError("Items after the final #KSUMMA are not covered by the control sum",
+                            end + 1, lines[end])
+    parts = []
+    for line_num in range(start + 1, end):
+        try:
+            parts.append(_ksumma_text(lines[line_num]))
+        except ValueError as e:
+            raise SieParseError(f"#KSUMMA-covered item is malformed: {e}",
+                                line_num + 1, lines[line_num])
+    text = ''.join(parts)
+    try:
+        data = text.encode('cp437')
+    except UnicodeEncodeError as e:
+        raise SieParseError(f"#KSUMMA needs CP437 text: {e}")
+    expected = int(value)
+    actual = zlib.crc32(data)  # CRC-32: polynomial EDB88320, preset and final XOR FFFFFFFF
+    if actual != expected:
+        raise SieParseError(
+            f"#KSUMMA control sum mismatch: file says {expected}, contents give {actual} "
+            "(file corrupted or modified)", end + 1, lines[end])
+    return expected
+
+
 # Main Parser Functions
 def _amount_token(token: str) -> str:
     """The amount field without surrounding quotes. Only a matched pair is removed."""
@@ -342,6 +456,8 @@ def parse_sie(file: TextIO) -> SieFile:
     if content.startswith('\ufeff'):  # Remove BOM if present
         content = content[1:]
     
+    # Items end at CR/LF only; other separators splitlines() knows stay in the summed bytes
+    sie_file.control_sum = _verify_ksumma(re.split(r'\r\n|\r|\n', content))
     lines = content.splitlines()
     current_voucher = None
     in_voucher_block = False

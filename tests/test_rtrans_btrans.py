@@ -184,7 +184,7 @@ def test_plain_trans_default_record_type():
 
 
 def test_new_field_keeps_positional_sie_file_arguments():
-    """removed_entries is the last SieFile field, so positional construction is unchanged."""
+    """New SieFile fields come after the original ones, so positional construction is unchanged."""
     fields = list(sie_parser.SieFile.__dataclass_fields__)
-    assert fields[-1] == "removed_entries"
+    assert fields[-2:] == ["removed_entries", "control_sum"]
     assert fields.index("opening_balances") == fields.index("entries") + 1

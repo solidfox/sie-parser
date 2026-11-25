@@ -1,0 +1,23 @@
+#FLAGGA 0
+#KSUMMA
+#PROGRAM "sie-parser tests" 1.0
+#FORMAT PC8
+#GEN 20240101
+#SIETYP 4
+#FNAMN "MÜlerifirman èkesson & ôberg AB"
+#ORGNR 556334-3689
+#RAR 0 20240101 20241231
+#KONTO 1910 "Kassa"
+#KONTO 1915 "Kassa \"special\""
+#KONTO 2640 "IngÜende moms"
+#KONTO 6250 "Porto"
+#DIM 6 "Projekt"
+#OBJEKT 6 "47" "Sie5-projektet"
+#IB 0 1910 1000.00
+#VER A 1 20240115 "Porto \"express\""
+{
+#TRANS	1910	{}	-1100.00
+#TRANS 2640 {} 300.00
+#TRANS 6250 {"6" "47"} 800.00 20240115 "FrimÑrken" 1 "Kalle"
+}
+#KSUMMA 4053613742
