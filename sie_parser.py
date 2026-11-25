@@ -28,7 +28,7 @@ __email__ = "your.email@example.com"
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TextIO, Union
+from typing import Dict, List, Optional, TextIO, Tuple, Union
 from datetime import datetime
 from enum import Enum
 
@@ -307,7 +307,7 @@ def parse_sie(file: TextIO) -> SieFile:
     current_voucher = None
     in_voucher_block = False
     # (account, amount) of the #RTRANS row on the previous non-empty line, else None
-    last_rtrans = None
+    last_rtrans: Optional[Tuple[str, float]] = None
     
     # Store KTYP records for deferred processing
     ktyp_records = {}

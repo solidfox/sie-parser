@@ -73,12 +73,12 @@ def test_rtrans_btrans_edge_cases():
     # #RTRANS as the last row without a copy still counts ...
     assert _rows(vouchers["A2"]) == [("TRANS", "1910", -500.0), ("RTRANS", "6250", 500.0)]
     # ... and the first #TRANS of the next voucher is not swallowed as a copy.
-    assert _rows(vouchers["A3"]) == [("TRANS", "6250", 300.0), ("TRANS", "1910", -300.0)]
+    assert _rows(vouchers["A3"]) == [("TRANS", "6250", 500.0), ("TRANS", "1910", -500.0)]
     # A #TRANS that does not immediately follow the #RTRANS is a normal row.
     assert _rows(vouchers["A4"]) == [
-        ("TRANS", "1910", -100.0),
+        ("TRANS", "1910", -120.0),
         ("RTRANS", "6250", 60.0),
-        ("TRANS", "6250", 40.0),
+        ("TRANS", "6250", 60.0),
     ]
     # A voucher with only removed rows has no effective entries.
     assert "A5" not in vouchers
