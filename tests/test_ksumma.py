@@ -159,6 +159,8 @@ def test_quoted_control_sum_value_accepted():
     from io import StringIO
     assert sie_parser.parse_sie(StringIO(_with_sum('{}'))).control_sum == zlib.crc32(b"#FNAMNX")
     assert sie_parser.parse_sie(StringIO(_with_sum('"{}"'))).control_sum == zlib.crc32(b"#FNAMNX")
+    # The spec sets no field width: zero padding is still the same number.
+    assert sie_parser.parse_sie(StringIO(_with_sum('00{}'))).control_sum == zlib.crc32(b"#FNAMNX")
 
 
 def test_items_before_opening_ksumma_rejected():
@@ -172,6 +174,9 @@ def test_items_before_opening_ksumma_rejected():
 @pytest.mark.parametrize("content, message", [
     ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA \u00b2\n", "Malformed #KSUMMA"),
     ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA 4294967296\n", "Malformed #KSUMMA"),
+    ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA 0004294967296\n", "Malformed #KSUMMA"),
+    # Long zero padding is a well-formed (wrong) value, not a crash in int().
+    ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA " + "0" * 5000 + "1\n", "control sum mismatch"),
     # A no-break space (CP437 0xFF) is not an SIE field separator.
     ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA " + str(zlib.crc32(b"#FNAMNX")) + "\u00a0\n",
      "Malformed #KSUMMA"),

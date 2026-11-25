@@ -379,12 +379,15 @@ def _verify_ksumma(lines: List[str]) -> Optional[int]:
     value = end_fields[1] if len(end_fields) == 2 else ''
     if len(value) >= 2 and value[0] == value[-1] == '"':
         value = value[1:-1]  # SIE fields may be quoted
-    if len(ksumma) > 2 or not re.fullmatch(r'[0-9]{1,10}', value) or int(value) > 0xFFFFFFFF:
+    digits = value.lstrip('0') or '0'  # the spec sets no field width, so zero padding is allowed
+    if (len(ksumma) > 2 or not re.fullmatch(r'[0-9]+', value) or len(digits) > 10
+            or int(digits) > 0xFFFFFFFF):
         line_num = ksumma[2][0] if len(ksumma) > 2 else end
         raise SieParseError("Malformed #KSUMMA control sum", line_num + 1, lines[line_num])
-    if any(_sie_fields(line) for line in lines[end + 1:]):
-        raise SieParseError("Items after the final #KSUMMA are not covered by the control sum",
-                            end + 1, lines[end])
+    for line_num in range(end + 1, len(lines)):
+        if _sie_fields(lines[line_num]):
+            raise SieParseError("Items after the final #KSUMMA are not covered by the control sum",
+                                line_num + 1, lines[line_num])
     parts = []
     for line_num in range(start + 1, end):
         label = _sie_fields(lines[line_num])[:1]
@@ -402,7 +405,7 @@ def _verify_ksumma(lines: List[str]) -> Optional[int]:
         data = text.encode('cp437')
     except UnicodeEncodeError as e:
         raise SieParseError(f"#KSUMMA needs CP437 text: {e}")
-    expected = int(value)
+    expected = int(digits)
     actual = zlib.crc32(data)  # CRC-32: polynomial EDB88320, preset and final XOR FFFFFFFF
     if actual != expected:
         raise SieParseError(
@@ -470,7 +473,7 @@ def parse_sie(file: TextIO) -> SieFile:
     if content.startswith('\ufeff'):  # Remove BOM if present
         content = content[1:]
     
-    # Items end at CR/LF only; other separators splitlines() knows stay in the summed bytes
+    # Items end at CR/LF only; the verifier rejects other separators splitlines() knows
     sie_file.control_sum = _verify_ksumma(re.split(r'\r\n|\r|\n', content))
     lines = content.splitlines()
     current_voucher = None
