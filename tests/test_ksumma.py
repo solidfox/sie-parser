@@ -105,6 +105,14 @@ def test_quotes_inside_a_field_count():
     assert sie_parser._ksumma_text('#TRANS 1910 {"1" "a"} 100') == '#TRANS19101a100'
 
 
+@pytest.mark.parametrize("item", ['#KONTO 1910 "Kas"sa', '#FNAMN "Maleri"firman',
+                                  '#TRANS 1910 {1 "a"b} 100', '#TRANS 1910 {1 "AB"}100 } 300'])
+def test_text_after_closing_quote_rejected(item):
+    """`"Kas"sa` would sum like `"Kassa"` while the parser reads another name."""
+    with pytest.raises(ValueError, match="text after a closing quotation mark"):
+        sie_parser._ksumma_text(item)
+
+
 def test_item_split_over_lines_rejected():
     """A line break between fields does not change the summed bytes, but the parser
     would lose the item, so a covered line without an item label is rejected."""

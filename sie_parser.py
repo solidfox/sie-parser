@@ -305,7 +305,8 @@ def _ksumma_text(line: str) -> str:
     field (``Kas""sa``) are part of the field.
 
     Raises:
-        ValueError: If the item ends inside a quoted field or an open object list.
+        ValueError: If the item ends inside a quoted field or an open object list,
+            or text follows a closing quotation mark.
     """
     if line.strip(' \t') in ('{', '}'):
         return ''  # voucher block delimiter
@@ -325,6 +326,11 @@ def _ksumma_text(line: str) -> str:
             continue
         if in_quotes:
             if char == '"':
+                # A closing quote ends the field: "Kas"sa would sum like "Kassa".
+                after = line[i + 1:i + 2]
+                if after not in ('', ' ', '\t') and not (
+                        after == '}' and open_lists and line[i + 2:i + 3] in ('', ' ', '\t')):
+                    raise ValueError("text after a closing quotation mark")
                 in_quotes = False
             else:
                 out.append(char)
