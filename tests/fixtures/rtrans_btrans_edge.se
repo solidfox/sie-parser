@@ -82,3 +82,10 @@
 #RTRANS "6250" {} 35.00
 #TRANS "6250" {} 35.00
 }
+#VER A 13 20080113 "Quoted copy, then an identical real row"
+{
+#RTRANS 6250 {} 40.00
+#TRANS "6250" {} 40.00
+#TRANS "6250" {} 40.00
+#TRANS 1910 {} -80.00
+}
