@@ -107,12 +107,22 @@ class SieAccount:
 
 @dataclass
 class SieEntry:
-    """Represents an entry in the SIE file."""
+    """Represents a transaction row (#TRANS, #RTRANS or #BTRANS) in the SIE file.
+
+    ``record_type`` is the SIE label the row came from:
+    - ``"TRANS"``: normal transaction row.
+    - ``"RTRANS"``: supplementary row (added after the voucher was first
+      registered). It counts toward the voucher like a normal row; the
+      identical ``#TRANS`` copy that follows it is skipped.
+    - ``"BTRANS"``: removed row. It never counts toward the voucher and is
+      stored in ``SieFile.removed_entries``, not ``SieFile.entries``.
+    """
     date: str
     account_number: str
     amount: float
     description: str
     voucher_index: Optional[str] = None
+    record_type: str = "TRANS"
 
 
 @dataclass
@@ -167,7 +177,8 @@ class SieFile:
     
     # Data collections
     accounts: Dict[str, SieAccount] = field(default_factory=dict)
-    entries: List[SieEntry] = field(default_factory=list)
+    entries: List[SieEntry] = field(default_factory=list)  # #TRANS and #RTRANS rows
+    removed_entries: List[SieEntry] = field(default_factory=list)  # #BTRANS rows
     opening_balances: List[SieBalance] = field(default_factory=list)
     closing_balances: List[SieBalance] = field(default_factory=list)
     result_balances: List[SieBalance] = field(default_factory=list)
@@ -294,6 +305,8 @@ def parse_sie(file: TextIO) -> SieFile:
     lines = content.splitlines()
     current_voucher = None
     in_voucher_block = False
+    # True while the previous non-empty line was an #RTRANS row inside a voucher
+    skip_rtrans_copy = False
     
     # Store KTYP records for deferred processing
     ktyp_records = {}
@@ -306,6 +319,8 @@ def parse_sie(file: TextIO) -> SieFile:
         line = line.strip()
         if not line:
             continue
+        follows_rtrans = skip_rtrans_copy
+        skip_rtrans_copy = False
             
         try:
             # Handle voucher block delimiters
@@ -497,12 +512,19 @@ def parse_sie(file: TextIO) -> SieFile:
                             'date': parts[3],            # Date
                             'description': description
                         }
-            elif line.startswith('#TRANS'):
-                # Transaction within a voucher - only process if we're in a voucher block and have a current voucher
+            elif line.startswith(('#TRANS', '#RTRANS', '#BTRANS')):
+                # Transaction rows - only process if we're in a voucher block and have a current voucher.
+                # Per SIE 4B, an #RTRANS row is immediately followed by an identical #TRANS
+                # copy for older readers; we keep the #RTRANS row and skip that copy so the
+                # row is not counted twice. #BTRANS rows are removed rows: they never count
+                # toward the voucher and go to removed_entries instead of entries.
                 if in_voucher_block and current_voucher:
+                    if follows_rtrans and line.startswith('#TRANS'):
+                        continue  # backward-compatibility copy of the preceding #RTRANS
+                    skip_rtrans_copy = line.startswith('#RTRANS')
                     # Parse transaction line according to SIE specification:
                     # Format: #TRANS account no {object list} amount transdate transtext quantity sign
-                    parts = line.split(' ', 2)  # Split into #TRANS, account, and rest
+                    parts = line.split(' ', 2)  # Split into label, account, and rest
                     if len(parts) >= 3:
                         account_number = parts[1]
                         rest = parts[2].strip()
@@ -537,9 +559,13 @@ def parse_sie(file: TextIO) -> SieFile:
                             account_number=account_number,
                             amount=amount,
                             description=current_voucher['description'],
-                            voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}"
+                            voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}",
+                            record_type=parts[0][1:],  # "TRANS", "RTRANS" or "BTRANS"
                         )
-                        sie_file.entries.append(entry)
+                        if entry.record_type == 'BTRANS':
+                            sie_file.removed_entries.append(entry)
+                        else:
+                            sie_file.entries.append(entry)
                         
         except (ValueError, IndexError) as e:
             raise SieParseError(f"Error parsing line: {str(e)}", line_num, line)

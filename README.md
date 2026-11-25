@@ -238,15 +238,13 @@ This parser implements **~85% of the SIE 4B specification**, covering all core f
 **Accounts**: `#KONTO`, `#KTYP`, `#SRU`  
 **Dimensions**: `#DIM`, `#OBJEKT`  
 **Balances**: `#IB`, `#UB`, `#RES`  
-**Transactions**: `#VER`, `#TRANS`
+**Transactions**: `#VER`, `#TRANS`, `#RTRANS`, `#BTRANS`
 
 ### ⚠️ Not Yet Implemented (Missing ~15%)
 
 **High Priority Missing:**
 - `#PSALDO` - Period end balance items (SIE type 2/3)
 - `#PBUDGET` - Period budget items (SIE type 2/3)
-- `#RTRANS` - Supplementary transaction items
-- `#BTRANS` - Removed transaction items
 - `#KSUMMA` - Control summation/checksum (CRC-32)
 
 **Medium Priority Missing:**
@@ -264,6 +262,7 @@ This parser implements **~85% of the SIE 4B specification**, covering all core f
 
 - **CP437 Encoding**: Uses IBM PC 8-bits extended ASCII as mandated
 - **Voucher Structure**: Proper `#VER`/`#TRANS` block handling
+- **Supplementary/Removed Rows**: `#RTRANS` rows are kept in `entries` with `record_type == "RTRANS"`, and the identical `#TRANS` copy that follows each one is skipped, so it is counted once. `#BTRANS` rows never count toward the voucher; they are in `removed_entries` with `record_type == "BTRANS"`. Normal rows have `record_type == "TRANS"`.
 - **Balance Validation**: Ensures vouchers balance to zero
 - **Dimension Objects**: Supports complex dimension objects like `{"1" "456" "7" "47"}`
 - **Deferred Processing**: Handles `#KTYP` records regardless of declaration order

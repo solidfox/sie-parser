@@ -1,0 +1,39 @@
+#FLAGGA 0
+#FORMAT PC8
+#SIETYP 4
+#FNAMN "Test AB"
+#RAR 0 20080101 20081231
+#KONTO 1910 "Kassa"
+#KONTO 2640 "Ingaende moms"
+#KONTO 6110 "Kontorsmateriel"
+#KONTO 6250 "Porto"
+#VER A 1 20080101 "Copy after blank line"
+{
+#TRANS 1910 {} -800.00
+
+#RTRANS 6250 {} 800.00
+
+#TRANS 6250 {} 800.00
+}
+#VER A 2 20080102 "RTRANS last, no copy"
+{
+#TRANS 1910 {} -500.00
+#RTRANS 6250 {} 500.00
+}
+#VER A 3 20080103 "Next voucher starts with TRANS"
+{
+#TRANS 6250 {} 300.00
+#TRANS 1910 {} -300.00
+}
+#VER A 4 20080104 "BTRANS between RTRANS and TRANS"
+{
+#TRANS 1910 {} -100.00
+#RTRANS 6250 {} 60.00
+#BTRANS 6110 {} 60.00
+#TRANS 6250 {} 40.00
+}
+#VER A 5 20080105 "Only removed rows"
+{
+#BTRANS 6110 {} 250.00
+#BTRANS 1910 {} -250.00
+}
