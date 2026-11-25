@@ -284,6 +284,18 @@ def _extract_quoted_value(line: str) -> str:
 
 
 # Main Parser Functions
+def _starts_with_amount(fields: str) -> bool:
+    """True if the first field (the amount of a transaction row) is empty or a number."""
+    tokens = fields.split()
+    token = tokens[0].strip('"') if tokens else ''
+    try:
+        if token and token != '{}':
+            float(token.replace(',', '.'))
+        return True
+    except ValueError:
+        return False
+
+
 def parse_sie(file: TextIO) -> SieFile:
     """
     Parse a SIE file and return structured data.
@@ -530,16 +542,18 @@ def parse_sie(file: TextIO) -> SieFile:
                         
                         # Find the object list (between { and })
                         if rest.startswith('{'):
-                            # Find the closing brace, skipping any inside quoted object IDs
-                            brace_end, in_quotes = -1, False
-                            for i, ch in enumerate(rest):
-                                if ch == '"' and rest[i - 1] != '\\':
-                                    in_quotes = not in_quotes
-                                elif ch == '}' and not in_quotes:
-                                    brace_end = i
-                                    break
-                            if brace_end == -1:
-                                brace_end = rest.find('}')  # quotes don't pair up: first brace
+                            # Find the closing brace. The first '}' ends the list unless the
+                            # amount after it does not parse: then a '}' inside a quoted object
+                            # ID ended it too early, so use the first '}' outside quotes.
+                            brace_end = rest.find('}')
+                            if brace_end != -1 and not _starts_with_amount(rest[brace_end + 1:]):
+                                in_quotes = False
+                                for i, ch in enumerate(rest):
+                                    if ch == '"' and rest[i - 1] != '\\':
+                                        in_quotes = not in_quotes
+                                    elif ch == '}' and not in_quotes:
+                                        brace_end = i
+                                        break
                             if brace_end != -1:
                                 object_list = rest[1:brace_end]  # Extract content between braces
                                 remaining = rest[brace_end + 1:].strip()

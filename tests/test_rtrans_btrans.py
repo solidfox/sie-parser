@@ -112,8 +112,9 @@ def test_rtrans_btrans_edge_cases():
         ("TRANS", "6110", 100.0),
         ("TRANS", "6110", 100.0),
         ("TRANS", "6110", 100.0),
+        ("TRANS", "6110", 100.0),
         ("RTRANS", "6250", 30.0),
-        ("TRANS", "1910", -330.0),
+        ("TRANS", "1910", -430.0),
     ]
     # Quoted amounts parse, and the copy is still recognised.
     assert _rows(vouchers["A11"]) == [("TRANS", "1910", -25.0), ("RTRANS", "6250", 25.0)]
