@@ -167,7 +167,7 @@ def test_items_before_opening_ksumma_rejected():
     """Only #FLAGGA may come before the opening #KSUMMA: other items would not be covered."""
     from io import StringIO
     content = '#IB 0 1910 999.00\n' + _with_sum('{}')
-    with pytest.raises(sie_parser.SieParseError, match="before the opening #KSUMMA"):
+    with pytest.raises(sie_parser.SieParseError, match="Line 1: Items before the opening #KSUMMA"):
         sie_parser.parse_sie(StringIO(content))
 
 

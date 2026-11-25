@@ -305,7 +305,7 @@ def _ksumma_text(line: str) -> str:
     field (``Kas""sa``) are part of the field.
 
     Raises:
-        ValueError: If the item ends inside a quoted field.
+        ValueError: If the item ends inside a quoted field or an open object list.
     """
     if line.strip(' \t') in ('{', '}'):
         return ''  # voucher block delimiter
@@ -370,9 +370,10 @@ def _verify_ksumma(lines: List[str]) -> Optional[int]:
     (start, start_fields) = ksumma[0]
     if len(start_fields) != 1:
         raise SieParseError("The first #KSUMMA must have no value", start + 1, lines[start])
-    if any(_sie_fields(line)[:1] not in ([], ['#FLAGGA']) for line in lines[:start]):
-        raise SieParseError("Items before the opening #KSUMMA are not covered by the control sum",
-                            start + 1, lines[start])
+    for line_num in range(start):
+        if _sie_fields(lines[line_num])[:1] not in ([], ['#FLAGGA']):
+            raise SieParseError("Items before the opening #KSUMMA are not covered by the control sum",
+                                line_num + 1, lines[line_num])
     if len(ksumma) < 2:
         raise SieParseError("#KSUMMA control sum missing at end of file (file truncated?)")
     (end, end_fields) = ksumma[1]
