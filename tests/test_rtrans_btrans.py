@@ -136,7 +136,17 @@ def test_plain_trans_default_record_type():
     result = sie_parser.parse_sie_file(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_sie4.se")
     )
-    assert result.entries
+    # Same rows as the parser before #RTRANS/#BTRANS support (origin/main).
+    assert [(e.voucher_index, e.account_number, e.amount) for e in result.entries] == [
+        ("A1", "1910", -1000.0), ("A1", "2440", 200.0), ("A1", "4010", 800.0),
+        ("A2", "3010", 1250.0), ("A2", "2441", 250.0), ("A2", "1510", -1500.0),
+        ("A3", "1920", 1500.0), ("A3", "1510", -1500.0),
+        ("A4", "2610", -800.0), ("A4", "2440", -200.0), ("A4", "1920", 1000.0),
+        ("A5", "5010", -5000.0), ("A5", "2731", -1250.0), ("A5", "2732", 1250.0),
+        ("A5", "1920", 5000.0),
+        ("A6", "8010", 1000.0), ("A6", "8020", -500.0), ("A6", "8050", -200.0),
+        ("A6", "1920", -300.0),
+    ]
     assert all(e.record_type == "TRANS" for e in result.entries)
     assert result.removed_entries == []
 
