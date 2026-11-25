@@ -301,7 +301,8 @@ def _ksumma_text(line: str) -> str:
     between fields, the quotation marks around fields and the braces around
     object lists and voucher blocks do not. An escaped quotation mark
     (backslash + quote) counts as just the quotation mark, in any field.
-    Other braces (``#KONTO 1910 {Kassa}``) are part of the field.
+    Other braces (``#KONTO 1910 {Kassa}``) and quotes that do not start a
+    field (``Kas""sa``) are part of the field.
 
     Raises:
         ValueError: If the item ends inside a quoted field.
@@ -313,7 +314,7 @@ def _ksumma_text(line: str) -> str:
     out = []
     in_quotes = False
     open_lists = 0  # object-list braces opened on this line and not yet closed
-    list_seen = False  # an item has at most one object list: its first '{' field
+    list_start = -1  # index of the brace that opened the object list
     i = 0
     while i < len(line):
         char = line[i]
@@ -326,14 +327,15 @@ def _ksumma_text(line: str) -> str:
                 in_quotes = False
             else:
                 out.append(char)
-        elif char == '"':
-            in_quotes = True
+        elif char == '"' and (i == 0 or line[i - 1] in ' \t'
+                              or (i - 1 == list_start and open_lists)):
+            in_quotes = True  # opens a quoted field; a quote inside a field is text
         elif char in ' \t':
             pass
-        elif (char == '{' and has_object_list and not list_seen
+        elif (char == '{' and has_object_list and list_start < 0
               and (i == 0 or line[i - 1] in ' \t')):
-            open_lists += 1
-            list_seen = True
+            open_lists += 1  # an item has at most one object list: its first '{' field
+            list_start = i
         elif char == '}' and open_lists:
             open_lists -= 1
         else:
@@ -341,6 +343,8 @@ def _ksumma_text(line: str) -> str:
         i += 1
     if in_quotes:
         raise ValueError("unterminated quoted field")
+    if open_lists:
+        raise ValueError("unclosed object list")
     return ''.join(out)
 
 
@@ -358,6 +362,11 @@ def _verify_ksumma(lines: List[str]) -> Optional[int]:
               if _sie_fields(line)[:1] == ['#KSUMMA']]
     if not ksumma:
         return None
+    for line_num, line in enumerate(lines):
+        if re.search('[\x0b\x0c\x1c-\x1e\x85\u2028\u2029]', line):
+            # The parser would split this item in two, but the checks here would not
+            raise SieParseError("Control character splits an item (SIE allows none in text)",
+                                line_num + 1, line)
     (start, start_fields) = ksumma[0]
     if len(start_fields) != 1:
         raise SieParseError("The first #KSUMMA must have no value", start + 1, lines[start])
@@ -378,6 +387,11 @@ def _verify_ksumma(lines: List[str]) -> Optional[int]:
                             end + 1, lines[end])
     parts = []
     for line_num in range(start + 1, end):
+        label = _sie_fields(lines[line_num])[:1]
+        if (label and not label[0].startswith('#')
+                and lines[line_num].strip(' \t') not in ('{', '}')):
+            raise SieParseError("Item without a label (line break inside an item?)",
+                                line_num + 1, lines[line_num])
         try:
             parts.append(_ksumma_text(lines[line_num]))
         except ValueError as e:

@@ -58,11 +58,20 @@ def test_escaped_quotes_and_braces_inside_field_values():
     assert sie_parser._ksumma_text('  }') == ''
 
 
-def test_control_characters_are_summed_not_split():
-    """Only LF/CRLF end an item, so a stray vertical tab changes the control sum."""
+@pytest.mark.parametrize("content", [
+    # Inside the covered items: would be summed as one item but parsed as two
+    '#FLAGGA 0\n#KSUMMA\n#FNAMN Ka\x0bssa\n#KSUMMA ' + str(zlib.crc32(b"#FNAMNKassa")) + '\n',
+    # On the #FLAGGA line: would smuggle an uncovered #KONTO past the layout check
+    '#FLAGGA 0\x0b#KONTO 9999 Injected\n#KSUMMA\n#FNAMN X\n#KSUMMA ' + str(zlib.crc32(b"#FNAMNX")) + '\n',
+    '#FLAGGA 0\n#KSUMMA\n#FNAMN X\n#KSUMMA ' + str(zlib.crc32(b"#FNAMNX")) + '\x1c#KONTO 9999 X\n',
+    # A trailing one, which str.splitlines() alone would not reveal
+    '#FLAGGA 0\x0b\n#KSUMMA\n#FNAMN X\n#KSUMMA ' + str(zlib.crc32(b"#FNAMNX")) + '\n',
+])
+def test_line_breaking_control_characters_rejected(content):
+    """The parser splits lines at control characters such as a vertical tab; a checksummed
+    file with one is rejected, so no item escapes the control sum."""
     from io import StringIO
-    content = '#FLAGGA 0\n#KSUMMA\n#FNAMN Ka\x0bssa\n#KSUMMA ' + str(zlib.crc32(b"#FNAMNKassa")) + '\n'
-    with pytest.raises(sie_parser.SieParseError, match="control sum mismatch"):
+    with pytest.raises(sie_parser.SieParseError, match="Control character splits an item"):
         sie_parser.parse_sie(StringIO(content))
 
 
@@ -72,6 +81,36 @@ def test_unterminated_quote_in_covered_item_rejected():
     content = '#FLAGGA 0\n#KSUMMA\n#FNAMN "X\n#KSUMMA ' + str(zlib.crc32(b"#FNAMNX")) + '\n'
     with pytest.raises(sie_parser.SieParseError, match="unterminated quoted field"):
         sie_parser.parse_sie(StringIO(content))
+
+
+def test_unclosed_object_list_in_covered_item_rejected():
+    """A lost closing object-list brace does not change the summed bytes either."""
+    from io import StringIO
+    content = ('#FLAGGA 0\n#KSUMMA\n#OIB 0 1510 {8 "12345" 23780.78\n#KSUMMA '
+               + str(zlib.crc32(b"#OIB0151081234523780.78")) + '\n')
+    with pytest.raises(sie_parser.SieParseError, match="unclosed object list"):
+        sie_parser.parse_sie(StringIO(content))
+
+
+def test_quotes_inside_a_field_count():
+    """A quote only delimits a field at its start; inside a field it is text and counts,
+    so `Kas""sa` and `Kassa` sum differently."""
+    assert sie_parser._ksumma_text('#KONTO 1910 Kas""sa') == '#KONTO1910Kas""sa'
+    assert sie_parser._ksumma_text('#FNAMN abc"de f') == '#FNAMNabc"def'
+    # Inside an object list a quote opens a field only right after the list's own brace.
+    assert sie_parser._ksumma_text('#TRANS 1910 {1 a{""b} 100') == '#TRANS19101a{""b100'
+    assert sie_parser._ksumma_text('#TRANS 1910 {"1" "a"} 100') == '#TRANS19101a100'
+
+
+def test_item_split_over_lines_rejected():
+    """A line break between fields does not change the summed bytes, but the parser
+    would lose the item, so a covered line without an item label is rejected."""
+    from io import StringIO
+    for split, summed in [('#KONTO\n1910 "Kassa"', b"#KONTO1910Kassa"),
+                          ('#OBJEKT 1\n{ "Kassa"', b"#OBJEKT1{Kassa")]:
+        content = '#FLAGGA 0\n#KSUMMA\n' + split + '\n#KSUMMA ' + str(zlib.crc32(summed)) + '\n'
+        with pytest.raises(sie_parser.SieParseError, match="Item without a label"):
+            sie_parser.parse_sie(StringIO(content))
 
 
 def test_zlib_matches_spec_algorithm():
