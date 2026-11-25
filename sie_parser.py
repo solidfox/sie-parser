@@ -114,7 +114,8 @@ class SieEntry:
     - ``"RTRANS"``: supplementary row (added after the voucher was first
       registered). It counts toward the voucher like a normal row; the
       ``#TRANS`` copy that immediately follows it (same account and amount)
-      is skipped.
+      is skipped, and the row takes that copy's account spelling (quoted or
+      not), so account totals match readers that only count ``#TRANS``.
     - ``"BTRANS"``: removed row. It never counts toward the voucher and is
       stored in ``SieFile.removed_entries``, not ``SieFile.entries``.
     """
@@ -529,8 +530,14 @@ def parse_sie(file: TextIO) -> SieFile:
                         
                         # Find the object list (between { and })
                         if rest.startswith('{'):
-                            # Find the closing brace
-                            brace_end = rest.find('}')
+                            # Find the closing brace, skipping any inside quoted object IDs
+                            brace_end, in_quotes = -1, False
+                            for i, ch in enumerate(rest):
+                                if ch == '"' and rest[i - 1] != '\\':
+                                    in_quotes = not in_quotes
+                                elif ch == '}' and not in_quotes:
+                                    brace_end = i
+                                    break
                             if brace_end != -1:
                                 object_list = rest[1:brace_end]  # Extract content between braces
                                 remaining = rest[brace_end + 1:].strip()

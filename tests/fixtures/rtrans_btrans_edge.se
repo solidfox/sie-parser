@@ -89,3 +89,10 @@
 #TRANS "6250" {} 40.00
 #TRANS 1910 {} -80.00
 }
+#VER A 14 20080114 "Brace inside a quoted object ID"
+{
+#BTRANS 6110 {1 "A}B"} 800.00
+#RTRANS 6250 {1 "A}B"} 50.00
+#TRANS 6250 {1 "A}B"} 50.00
+#TRANS 1910 {} -50.00
+}

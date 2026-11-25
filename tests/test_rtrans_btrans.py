@@ -105,6 +105,8 @@ def test_rtrans_btrans_edge_cases():
         ("TRANS", '"6250"', 40.0),
         ("TRANS", "1910", -80.0),
     ]
+    # A "}" inside a quoted object ID does not end the object list.
+    assert _rows(vouchers["A14"]) == [("RTRANS", "6250", 50.0), ("TRANS", "1910", -50.0)]
     # Quoted amounts parse, and the copy is still recognised.
     assert _rows(vouchers["A11"]) == [("TRANS", "1910", -25.0), ("RTRANS", "6250", 25.0)]
     # #RTRANS/#BTRANS outside a voucher block are ignored.
@@ -117,6 +119,7 @@ def test_rtrans_btrans_edge_cases():
         ("BTRANS", "6110", 250.0),
         ("BTRANS", "1910", -250.0),
         ("BTRANS", "6110", 25.0),
+        ("BTRANS", "6110", 800.0),
     ]
 
 
