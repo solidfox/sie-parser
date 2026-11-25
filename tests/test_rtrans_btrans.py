@@ -88,6 +88,14 @@ def test_rtrans_btrans_edge_cases():
     assert _rows(vouchers["A7"]) == [("RTRANS", "6250", 700.0), ("TRANS", "1910", -700.0)]
     # An unknown label that starts with "#RTRANS" is ignored and arms no copy-skip.
     assert _rows(vouchers["A8"]) == [("TRANS", "6250", 100.0), ("TRANS", "1910", -100.0)]
+    # Two #RTRANS rows in a row: only the #TRANS right after the second is its copy.
+    assert _rows(vouchers["A9"]) == [
+        ("TRANS", "1910", -30.0),
+        ("RTRANS", "6250", 10.0),
+        ("RTRANS", "6250", 20.0),
+    ]
+    # #RTRANS/#BTRANS outside a voucher block are ignored.
+    assert all(e.amount != 999.0 for e in result.entries + result.removed_entries)
 
     for rows in vouchers.values():
         assert sum(e.amount for e in rows) == 0

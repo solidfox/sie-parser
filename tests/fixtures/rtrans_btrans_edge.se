@@ -7,6 +7,8 @@
 #KONTO 2640 "Ingaende moms"
 #KONTO 6110 "Kontorsmateriel"
 #KONTO 6250 "Porto"
+#RTRANS 6250 {} 999.00
+#BTRANS 6250 {} 999.00
 #VER A 1 20080101 "Copy after blank line"
 {
 #TRANS 1910 {} -800.00
@@ -53,4 +55,11 @@
 #RTRANSX 6250 {} 70.00
 #TRANS 6250 {} 100.00
 #TRANS 1910 {} -100.00
+}
+#VER A 9 20080109 "Back-to-back RTRANS rows"
+{
+#TRANS 1910 {} -30.00
+#RTRANS 6250 {} 10.00
+#RTRANS 6250 {} 20.00
+#TRANS 6250 {} 20.00
 }

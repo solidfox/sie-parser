@@ -182,6 +182,8 @@ Balanced vouchers: 3/3
 ### Transactions
 - `#VER` - Voucher headers
 - `#TRANS` - Transaction lines with dimension support
+- `#RTRANS` - Supplementary transaction lines (in `entries`; the `#TRANS` copy after each is skipped)
+- `#BTRANS` - Removed transaction lines (in `removed_entries`; never count toward the voucher)
 
 ### Dimensions
 - `#DIM` - Dimension definitions
@@ -267,7 +269,7 @@ This parser implements **~85% of the SIE 4B specification**, covering all core f
 - **Dimension Objects**: Supports complex dimension objects like `{"1" "456" "7" "47"}`
 - **Deferred Processing**: Handles `#KTYP` records regardless of declaration order
 
-The current implementation handles the vast majority of SIE files encountered in practice. The missing features are primarily used in specialized scenarios (period reporting, budget data, transaction corrections, and advanced object reporting).
+The current implementation handles the vast majority of SIE files encountered in practice. The missing features are primarily used in specialized scenarios (period reporting, budget data, and advanced object reporting).
 
 ## License
 
