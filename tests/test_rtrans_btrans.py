@@ -6,9 +6,12 @@ the row is counted once. #BTRANS rows are removed rows and never count toward
 the voucher balance.
 """
 
+import io
 import os
 import sys
 from collections import defaultdict
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -116,6 +119,13 @@ def test_rtrans_btrans_edge_cases():
         ("RTRANS", "6250", 30.0),
         ("TRANS", "1910", -430.0),
     ]
+    # A "}" in a quoted object ID, followed by a quote or a number, is not the end
+    # of the list when no amount follows it.
+    assert _rows(vouchers["A16"]) == [
+        ("RTRANS", "6250", 60.0),
+        ("TRANS", "6110", 40.0),
+        ("TRANS", "1910", -100.0),
+    ]
     # Quoted amounts parse, and the copy is still recognised.
     assert _rows(vouchers["A11"]) == [("TRANS", "1910", -25.0), ("RTRANS", "6250", 25.0)]
     # #RTRANS/#BTRANS outside a voucher block are ignored.
@@ -129,7 +139,28 @@ def test_rtrans_btrans_edge_cases():
         ("BTRANS", "1910", -250.0),
         ("BTRANS", "6110", 25.0),
         ("BTRANS", "6110", 800.0),
+        ("BTRANS", "6110", 800.0),
+        ("BTRANS", "6110", 700.0),
     ]
+
+
+@pytest.mark.parametrize("amount", ['""', '"', '100"', '"100'])
+def test_amount_with_unpaired_quote_is_rejected(amount):
+    """Only a matched pair of quotes is removed from an amount, so these fail as on main."""
+    src = '#VER A 1 20080101 "x"\n{\n#BTRANS 6110 {} ' + amount + '\n}\n'
+    with pytest.raises(sie_parser.SieParseError):
+        sie_parser.parse_sie(io.StringIO(src))
+
+
+@pytest.mark.parametrize("row", [
+    '#BTRANS 6110 {1 "A}B\\\\"} 700.00',
+    '#BTRANS 6110 {1 "A}B\\\\"} 700.00 20080116 "ref} 7 x"',
+])
+def test_unclosed_quote_in_object_list_is_rejected(row):
+    """A quote escaped with a backslash does not close the ID, so no amount is guessed."""
+    src = '#VER A 1 20080101 "x"\n{\n' + row + '\n}\n'
+    with pytest.raises(sie_parser.SieParseError):
+        sie_parser.parse_sie(io.StringIO(src))
 
 
 def test_plain_trans_default_record_type():

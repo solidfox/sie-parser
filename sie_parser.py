@@ -284,13 +284,39 @@ def _extract_quoted_value(line: str) -> str:
 
 
 # Main Parser Functions
+def _amount_token(token: str) -> str:
+    """The amount field without surrounding quotes. Only a matched pair is removed."""
+    if len(token) >= 2 and token[0] == token[-1] == '"':
+        return token[1:-1]
+    return token
+
+
+def _closing_brace_outside_quotes(rest: str) -> int:
+    """Index of the '}' that ends the object list at the start of ``rest``, or -1.
+
+    Quotes are tracked as in the spec: a '"' preceded by a backslash is part of
+    the text. The brace counts only if an amount follows it and every quote on
+    the line is closed; otherwise the line is malformed and -1 is returned.
+    """
+    in_quotes = False
+    brace_end = -1
+    for i, ch in enumerate(rest):
+        if ch == '"' and rest[i - 1] != '\\':
+            in_quotes = not in_quotes
+        elif ch == '}' and not in_quotes and brace_end == -1:
+            brace_end = i
+    if in_quotes or brace_end == -1 or not _starts_with_amount(rest[brace_end + 1:]):
+        return -1
+    return brace_end
+
+
 def _starts_with_amount(fields: str) -> bool:
-    """True if the first field (the amount of a transaction row) is empty or a number."""
+    """True if the first field (the amount of a transaction row) is missing or a number."""
     tokens = fields.split()
-    token = tokens[0].strip('"') if tokens else ''
+    if not tokens or tokens[0] == '{}':
+        return True
     try:
-        if token and token != '{}':
-            float(token.replace(',', '.'))
+        float(_amount_token(tokens[0]).replace(',', '.'))
         return True
     except ValueError:
         return False
@@ -542,18 +568,13 @@ def parse_sie(file: TextIO) -> SieFile:
                         
                         # Find the object list (between { and })
                         if rest.startswith('{'):
-                            # Find the closing brace. The first '}' ends the list unless the
-                            # amount after it does not parse: then a '}' inside a quoted object
-                            # ID ended it too early, so use the first '}' outside quotes.
+                            # Find the closing brace. The first '}' ends the list unless no
+                            # amount follows it: then it was inside a quoted object ID.
                             brace_end = rest.find('}')
                             if brace_end != -1 and not _starts_with_amount(rest[brace_end + 1:]):
-                                in_quotes = False
-                                for i, ch in enumerate(rest):
-                                    if ch == '"' and rest[i - 1] != '\\':
-                                        in_quotes = not in_quotes
-                                    elif ch == '}' and not in_quotes:
-                                        brace_end = i
-                                        break
+                                quoted_end = _closing_brace_outside_quotes(rest)
+                                if quoted_end != -1:
+                                    brace_end = quoted_end
                             if brace_end != -1:
                                 object_list = rest[1:brace_end]  # Extract content between braces
                                 remaining = rest[brace_end + 1:].strip()
@@ -570,8 +591,8 @@ def parse_sie(file: TextIO) -> SieFile:
                         remaining_parts = remaining.split()
                         amount = 0.0
                         if remaining_parts:
-                            amount_str = remaining_parts[0].strip('"')  # SIE fields may be quoted
-                            if amount_str and amount_str != '{}':
+                            amount_str = _amount_token(remaining_parts[0])  # SIE fields may be quoted
+                            if amount_str != '{}':
                                 amount = float(amount_str.replace(',', '.'))
                         
                         # Create entry (we store object_list for future use but don't parse it fully yet)
