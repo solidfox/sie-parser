@@ -96,3 +96,12 @@
 #TRANS 6250 {1 "A}B"} 50.00
 #TRANS 1910 {} -50.00
 }
+#VER A 15 20080115 "Object IDs whose quotes do not pair up"
+{
+#TRANS 6110 {1 "C:\"} 100.00
+#TRANS 6110 {1 "a"b"} 100.00
+#TRANS 6110 {1 5"} 100.00
+#RTRANS 6250 {1 "C:\"} 30.00
+#TRANS 6250 {1 "C:\"} 30.00
+#TRANS 1910 {} -330.00
+}

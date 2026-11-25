@@ -538,6 +538,8 @@ def parse_sie(file: TextIO) -> SieFile:
                                 elif ch == '}' and not in_quotes:
                                     brace_end = i
                                     break
+                            if brace_end == -1:
+                                brace_end = rest.find('}')  # quotes don't pair up: first brace
                             if brace_end != -1:
                                 object_list = rest[1:brace_end]  # Extract content between braces
                                 remaining = rest[brace_end + 1:].strip()
