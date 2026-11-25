@@ -525,6 +525,10 @@ def parse_sie(file: TextIO) -> SieFile:
                     parts = line.split(None, 2)  # Split into label, account, and rest
                     if len(parts) >= 3:
                         account_number = parts[1]
+                        if parts[0] != '#TRANS':
+                            # SIE fields may be quoted; #RTRANS replaces its #TRANS copy, so
+                            # it must land on the same (unquoted) account
+                            account_number = account_number.strip('"')
                         rest = parts[2].strip()
                         
                         # Find the object list (between { and })
@@ -560,7 +564,7 @@ def parse_sie(file: TextIO) -> SieFile:
                             voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}",
                             record_type=parts[0][1:],  # "TRANS", "RTRANS" or "BTRANS"
                         )
-                        copy_key = (account_number.strip('"'), amount)  # SIE fields may be quoted
+                        copy_key = (account_number.strip('"'), amount)  # the copy may be quoted too
                         if entry.record_type == 'TRANS' and prev_rtrans == copy_key:
                             continue  # backward-compatibility copy of the preceding #RTRANS
                         if entry.record_type == 'RTRANS':
