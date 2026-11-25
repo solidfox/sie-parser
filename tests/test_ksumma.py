@@ -56,6 +56,9 @@ def test_escaped_quotes_and_braces_inside_field_values():
     assert sie_parser._ksumma_text('#OIB 0 1510 {8 "12345"} 23780.78') == '#OIB01510812345' + '23780.78'
     assert sie_parser._ksumma_text('#TRANS 1910 {} -100 20240115 {Postage}') == '#TRANS1910-10020240115{Postage}'
     assert sie_parser._ksumma_text('  }') == ''
+    # The list ends at a '}' that ends a field; one inside an unquoted object ID is text.
+    assert sie_parser._ksumma_text('#OIB 0 1510 {8 AB}CD} 23780.78') == '#OIB015108AB}CD23780.78'
+    assert sie_parser._ksumma_text('#TRANS 1910 {1 "A"}') == '#TRANS19101A'
 
 
 @pytest.mark.parametrize("content", [
@@ -181,6 +184,8 @@ def test_items_before_opening_ksumma_rejected():
     ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA " + str(zlib.crc32(b"#FNAMNX")) + "\u00a0\n",
      "Malformed #KSUMMA"),
     ("#FLAGGA 0\n#KSUMMA 123\n#FNAMN \"X\"\n", "first #KSUMMA must have no value"),
+    # A lone final #KSUMMA: the opening one (and what came after it) may have been cut off.
+    ("#FLAGGA 0\n#FNAMN \"X\"\n#KSUMMA " + str(zlib.crc32(b"#FNAMNX")) + "\n", "first #KSUMMA must have no value"),
     ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA abc\n", "Malformed #KSUMMA"),
     ("#FLAGGA 0\n#KSUMMA\n#FNAMN \"X\"\n#KSUMMA 1\n#KSUMMA 2\n", "Malformed #KSUMMA"),
 ])

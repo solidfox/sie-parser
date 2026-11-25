@@ -318,6 +318,7 @@ def _ksumma_text(line: str) -> str:
     i = 0
     while i < len(line):
         char = line[i]
+        # Only backslash-quote is an escape in SIE, so "abc\" has no closing quote.
         if char == '\\' and line[i + 1:i + 2] == '"':
             out.append('"')
             i += 2
@@ -336,8 +337,8 @@ def _ksumma_text(line: str) -> str:
               and (i == 0 or line[i - 1] in ' \t')):
             open_lists += 1  # an item has at most one object list: its first '{' field
             list_start = i
-        elif char == '}' and open_lists:
-            open_lists -= 1
+        elif char == '}' and open_lists and line[i + 1:i + 2] in ('', ' ', '\t'):
+            open_lists -= 1  # closes the list at a field end; inside a field (AB}CD) it is text
         else:
             out.append(char)
         i += 1
