@@ -76,3 +76,9 @@
 #RTRANS 6250 {} "25.00"
 #TRANS 6250 {} 25.00
 }
+#VER A 12 20080112 "Quoted account in RTRANS and its copy"
+{
+#TRANS 1910 {} -35.00
+#RTRANS "6250" {} 35.00
+#TRANS "6250" {} 35.00
+}

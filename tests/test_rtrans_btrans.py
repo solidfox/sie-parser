@@ -97,6 +97,8 @@ def test_rtrans_btrans_edge_cases():
     # A quoted account number still identifies the copy, and the kept #RTRANS row
     # lands on the unquoted account, as the #TRANS copy would have.
     assert _rows(vouchers["A10"]) == [("TRANS", "1910", -15.0), ("RTRANS", "6250", 15.0)]
+    # The kept #RTRANS row takes its copy's account spelling, as main counted the copy.
+    assert _rows(vouchers["A12"]) == [("TRANS", "1910", -35.0), ("RTRANS", '"6250"', 35.0)]
     # Quoted amounts parse, and the copy is still recognised.
     assert _rows(vouchers["A11"]) == [("TRANS", "1910", -25.0), ("RTRANS", "6250", 25.0)]
     # #RTRANS/#BTRANS outside a voucher block are ignored.

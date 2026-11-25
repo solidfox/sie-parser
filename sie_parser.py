@@ -28,7 +28,7 @@ __email__ = "your.email@example.com"
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TextIO, Tuple, Union
+from typing import Dict, List, Optional, TextIO, Union
 from datetime import datetime
 from enum import Enum
 
@@ -306,8 +306,8 @@ def parse_sie(file: TextIO) -> SieFile:
     lines = content.splitlines()
     current_voucher = None
     in_voucher_block = False
-    # (account, amount) of the #RTRANS row on the previous non-empty line, else None
-    last_rtrans: Optional[Tuple[str, float]] = None
+    # The #RTRANS entry on the previous non-empty line, else None
+    last_rtrans: Optional[SieEntry] = None
     
     # Store KTYP records for deferred processing
     ktyp_records = {}
@@ -525,10 +525,6 @@ def parse_sie(file: TextIO) -> SieFile:
                     parts = line.split(None, 2)  # Split into label, account, and rest
                     if len(parts) >= 3:
                         account_number = parts[1]
-                        if parts[0] != '#TRANS':
-                            # SIE fields may be quoted; #RTRANS replaces its #TRANS copy, so
-                            # it must land on the same (unquoted) account
-                            account_number = account_number.strip('"')
                         rest = parts[2].strip()
                         
                         # Find the object list (between { and })
@@ -564,11 +560,16 @@ def parse_sie(file: TextIO) -> SieFile:
                             voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}",
                             record_type=parts[0][1:],  # "TRANS", "RTRANS" or "BTRANS"
                         )
-                        copy_key = (account_number.strip('"'), amount)  # the copy may be quoted too
-                        if entry.record_type == 'TRANS' and prev_rtrans == copy_key:
-                            continue  # backward-compatibility copy of the preceding #RTRANS
+                        if (entry.record_type == 'TRANS' and prev_rtrans is not None
+                                and prev_rtrans.amount == amount
+                                and prev_rtrans.account_number.strip('"') == account_number.strip('"')):
+                            # Backward-compatibility copy of the preceding #RTRANS (either may be
+                            # quoted). Skip it, but keep its account spelling: that is what was
+                            # counted before #RTRANS was supported.
+                            prev_rtrans.account_number = account_number
+                            continue
                         if entry.record_type == 'RTRANS':
-                            last_rtrans = copy_key
+                            last_rtrans = entry
                         if entry.record_type == 'BTRANS':
                             sie_file.removed_entries.append(entry)
                         else:
