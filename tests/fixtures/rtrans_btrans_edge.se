@@ -37,3 +37,20 @@
 #BTRANS 6110 {} 250.00
 #BTRANS 1910 {} -250.00
 }
+#VER A 6 20080106 "Copy written differently, tabs and double spaces"
+{
+#RTRANS  6250  { }  200
+#TRANS	6250	{}	200.00
+#TRANS 1910 {} -200.00
+}
+#VER A 7 20080107 "No copy, next row is a real row"
+{
+#RTRANS 6250 {} 700.00
+#TRANS 1910 {} -700.00
+}
+#VER A 8 20080108 "Unknown label is ignored"
+{
+#RTRANSX 6250 {} 70.00
+#TRANS 6250 {} 100.00
+#TRANS 1910 {} -100.00
+}

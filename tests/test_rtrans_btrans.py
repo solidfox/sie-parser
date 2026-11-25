@@ -64,7 +64,7 @@ def test_btrans_kept_out_of_entries():
 
 
 def test_rtrans_btrans_edge_cases():
-    """Copy after blank lines, missing copy, copy not immediately after, removed-only voucher."""
+    """Blank lines, missing or differently written copies, unknown labels, removed-only voucher."""
     result = _parse("rtrans_btrans_edge.se")
     vouchers = _by_voucher(result.entries)
 
@@ -82,6 +82,12 @@ def test_rtrans_btrans_edge_cases():
     ]
     # A voucher with only removed rows has no effective entries.
     assert "A5" not in vouchers
+    # The copy is recognised by account and amount, whatever the spacing or number format.
+    assert _rows(vouchers["A6"]) == [("RTRANS", "6250", 200.0), ("TRANS", "1910", -200.0)]
+    # A #TRANS right after an #RTRANS that is not its copy is kept.
+    assert _rows(vouchers["A7"]) == [("RTRANS", "6250", 700.0), ("TRANS", "1910", -700.0)]
+    # An unknown label that starts with "#RTRANS" is ignored and arms no copy-skip.
+    assert _rows(vouchers["A8"]) == [("TRANS", "6250", 100.0), ("TRANS", "1910", -100.0)]
 
     for rows in vouchers.values():
         assert sum(e.amount for e in rows) == 0
@@ -100,3 +106,10 @@ def test_plain_trans_default_record_type():
     assert result.entries
     assert all(e.record_type == "TRANS" for e in result.entries)
     assert result.removed_entries == []
+
+
+def test_new_field_keeps_positional_sie_file_arguments():
+    """removed_entries is the last SieFile field, so positional construction is unchanged."""
+    fields = list(sie_parser.SieFile.__dataclass_fields__)
+    assert fields[-1] == "removed_entries"
+    assert fields.index("opening_balances") == fields.index("entries") + 1

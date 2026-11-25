@@ -262,7 +262,7 @@ This parser implements **~85% of the SIE 4B specification**, covering all core f
 
 - **CP437 Encoding**: Uses IBM PC 8-bits extended ASCII as mandated
 - **Voucher Structure**: Proper `#VER`/`#TRANS` block handling
-- **Supplementary/Removed Rows**: `#RTRANS` rows are kept in `entries` with `record_type == "RTRANS"`, and the identical `#TRANS` copy that follows each one is skipped, so it is counted once. `#BTRANS` rows never count toward the voucher; they are in `removed_entries` with `record_type == "BTRANS"`. Normal rows have `record_type == "TRANS"`.
+- **Supplementary/Removed Rows**: `#RTRANS` rows are kept in `entries` with `record_type == "RTRANS"`, and the `#TRANS` copy that immediately follows each one (same account and amount) is skipped, so it is counted once; a following `#TRANS` that is not a copy is kept as a normal row. `#BTRANS` rows never count toward the voucher; they are in `removed_entries` with `record_type == "BTRANS"`. Normal rows have `record_type == "TRANS"`.
 - **Balance Validation**: Ensures vouchers balance to zero
 - **Dimension Objects**: Supports complex dimension objects like `{"1" "456" "7" "47"}`
 - **Deferred Processing**: Handles `#KTYP` records regardless of declaration order

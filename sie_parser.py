@@ -113,7 +113,8 @@ class SieEntry:
     - ``"TRANS"``: normal transaction row.
     - ``"RTRANS"``: supplementary row (added after the voucher was first
       registered). It counts toward the voucher like a normal row; the
-      identical ``#TRANS`` copy that follows it is skipped.
+      ``#TRANS`` copy that immediately follows it (same account and amount)
+      is skipped.
     - ``"BTRANS"``: removed row. It never counts toward the voucher and is
       stored in ``SieFile.removed_entries``, not ``SieFile.entries``.
     """
@@ -178,13 +179,13 @@ class SieFile:
     # Data collections
     accounts: Dict[str, SieAccount] = field(default_factory=dict)
     entries: List[SieEntry] = field(default_factory=list)  # #TRANS and #RTRANS rows
-    removed_entries: List[SieEntry] = field(default_factory=list)  # #BTRANS rows
     opening_balances: List[SieBalance] = field(default_factory=list)
     closing_balances: List[SieBalance] = field(default_factory=list)
     result_balances: List[SieBalance] = field(default_factory=list)
     dimensions: Dict[str, SieDimension] = field(default_factory=dict)
     objects: Dict[str, SieObject] = field(default_factory=dict)
     metadata: Dict[str, str] = field(default_factory=dict)
+    removed_entries: List[SieEntry] = field(default_factory=list)  # #BTRANS rows
 
 
 # Utility Functions
@@ -305,8 +306,8 @@ def parse_sie(file: TextIO) -> SieFile:
     lines = content.splitlines()
     current_voucher = None
     in_voucher_block = False
-    # True while the previous non-empty line was an #RTRANS row inside a voucher
-    skip_rtrans_copy = False
+    # (account, amount) of the #RTRANS row on the previous non-empty line, else None
+    last_rtrans = None
     
     # Store KTYP records for deferred processing
     ktyp_records = {}
@@ -319,8 +320,8 @@ def parse_sie(file: TextIO) -> SieFile:
         line = line.strip()
         if not line:
             continue
-        follows_rtrans = skip_rtrans_copy
-        skip_rtrans_copy = False
+        prev_rtrans = last_rtrans
+        last_rtrans = None
             
         try:
             # Handle voucher block delimiters
@@ -512,19 +513,16 @@ def parse_sie(file: TextIO) -> SieFile:
                             'date': parts[3],            # Date
                             'description': description
                         }
-            elif line.startswith(('#TRANS', '#RTRANS', '#BTRANS')):
+            elif line.split(None, 1)[0] in ('#TRANS', '#RTRANS', '#BTRANS'):
                 # Transaction rows - only process if we're in a voucher block and have a current voucher.
                 # Per SIE 4B, an #RTRANS row is immediately followed by an identical #TRANS
                 # copy for older readers; we keep the #RTRANS row and skip that copy so the
                 # row is not counted twice. #BTRANS rows are removed rows: they never count
                 # toward the voucher and go to removed_entries instead of entries.
                 if in_voucher_block and current_voucher:
-                    if follows_rtrans and line.startswith('#TRANS'):
-                        continue  # backward-compatibility copy of the preceding #RTRANS
-                    skip_rtrans_copy = line.startswith('#RTRANS')
                     # Parse transaction line according to SIE specification:
                     # Format: #TRANS account no {object list} amount transdate transtext quantity sign
-                    parts = line.split(' ', 2)  # Split into label, account, and rest
+                    parts = line.split(None, 2)  # Split into label, account, and rest
                     if len(parts) >= 3:
                         account_number = parts[1]
                         rest = parts[2].strip()
@@ -562,6 +560,10 @@ def parse_sie(file: TextIO) -> SieFile:
                             voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}",
                             record_type=parts[0][1:],  # "TRANS", "RTRANS" or "BTRANS"
                         )
+                        if entry.record_type == 'TRANS' and prev_rtrans == (account_number, amount):
+                            continue  # backward-compatibility copy of the preceding #RTRANS
+                        if entry.record_type == 'RTRANS':
+                            last_rtrans = (account_number, amount)
                         if entry.record_type == 'BTRANS':
                             sie_file.removed_entries.append(entry)
                         else:
