@@ -547,7 +547,7 @@ def parse_sie(file: TextIO) -> SieFile:
                         remaining_parts = remaining.split()
                         amount = 0.0
                         if remaining_parts:
-                            amount_str = remaining_parts[0]
+                            amount_str = remaining_parts[0].strip('"')  # SIE fields may be quoted
                             if amount_str and amount_str != '{}':
                                 amount = float(amount_str.replace(',', '.'))
                         
@@ -560,10 +560,11 @@ def parse_sie(file: TextIO) -> SieFile:
                             voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}",
                             record_type=parts[0][1:],  # "TRANS", "RTRANS" or "BTRANS"
                         )
-                        if entry.record_type == 'TRANS' and prev_rtrans == (account_number, amount):
+                        copy_key = (account_number.strip('"'), amount)  # SIE fields may be quoted
+                        if entry.record_type == 'TRANS' and prev_rtrans == copy_key:
                             continue  # backward-compatibility copy of the preceding #RTRANS
                         if entry.record_type == 'RTRANS':
-                            last_rtrans = (account_number, amount)
+                            last_rtrans = copy_key
                         if entry.record_type == 'BTRANS':
                             sie_file.removed_entries.append(entry)
                         else:

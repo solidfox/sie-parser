@@ -94,6 +94,10 @@ def test_rtrans_btrans_edge_cases():
         ("RTRANS", "6250", 10.0),
         ("RTRANS", "6250", 20.0),
     ]
+    # A quoted account number still identifies the copy.
+    assert [r[0] for r in _rows(vouchers["A10"])] == ["TRANS", "RTRANS"]
+    # Quoted amounts parse, and the copy is still recognised.
+    assert _rows(vouchers["A11"]) == [("TRANS", "1910", -25.0), ("RTRANS", "6250", 25.0)]
     # #RTRANS/#BTRANS outside a voucher block are ignored.
     assert all(e.amount != 999.0 for e in result.entries + result.removed_entries)
 
@@ -103,6 +107,7 @@ def test_rtrans_btrans_edge_cases():
         ("BTRANS", "6110", 60.0),
         ("BTRANS", "6110", 250.0),
         ("BTRANS", "1910", -250.0),
+        ("BTRANS", "6110", 25.0),
     ]
 
 

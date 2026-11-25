@@ -63,3 +63,16 @@
 #RTRANS 6250 {} 20.00
 #TRANS 6250 {} 20.00
 }
+#VER A 10 20080110 "Quoted account in RTRANS"
+{
+#TRANS 1910 {} -15.00
+#RTRANS "6250" {} 15.00
+#TRANS 6250 {} 15.00
+}
+#VER A 11 20080111 "Quoted amounts"
+{
+#TRANS 1910 {} "-25.00"
+#BTRANS 6110 {} "25.00"
+#RTRANS 6250 {} "25.00"
+#TRANS 6250 {} 25.00
+}
