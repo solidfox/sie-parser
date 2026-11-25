@@ -52,7 +52,7 @@
 }
 #VER A 8 20080108 "Unknown label is ignored"
 {
-#RTRANSX 6250 {} 70.00
+#RTRANSX 6250 {} 100.00
 #TRANS 6250 {} 100.00
 #TRANS 1910 {} -100.00
 }
