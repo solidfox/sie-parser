@@ -162,6 +162,7 @@ Balanced vouchers: 3/3
 - `#ORGNR` - Organization number
 - `#VALUTA` - Currency
 - `#TAXAR` - Tax year
+- `#KSUMMA` - Control sum (CRC-32), verified when present (in `control_sum`)
 
 ### Account Information
 - `#KONTO` - Account definitions
