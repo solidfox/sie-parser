@@ -1,0 +1,117 @@
+#FLAGGA 0
+#FORMAT PC8
+#SIETYP 4
+#FNAMN "Test AB"
+#RAR 0 20080101 20081231
+#KONTO 1910 "Kassa"
+#KONTO 2640 "Ingaende moms"
+#KONTO 6110 "Kontorsmateriel"
+#KONTO 6250 "Porto"
+#RTRANS 6250 {} 999.00
+#BTRANS 6250 {} 999.00
+#VER A 1 20080101 "Copy after blank line"
+{
+#TRANS 1910 {} -800.00
+
+#RTRANS 6250 {} 800.00
+
+#TRANS 6250 {} 800.00
+}
+#VER A 2 20080102 "RTRANS last, no copy"
+{
+#TRANS 1910 {} -500.00
+#RTRANS 6250 {} 500.00
+}
+#VER A 3 20080103 "Next voucher starts with TRANS"
+{
+#TRANS 6250 {} 500.00
+#TRANS 1910 {} -500.00
+}
+#VER A 4 20080104 "BTRANS between RTRANS and TRANS"
+{
+#TRANS 1910 {} -120.00
+#RTRANS 6250 {} 60.00
+#BTRANS 6110 {} 60.00
+#TRANS 6250 {} 60.00
+}
+#VER A 5 20080105 "Only removed rows"
+{
+#BTRANS 6110 {} 250.00
+#BTRANS 1910 {} -250.00
+}
+#VER A 6 20080106 "Copy written differently, tabs and double spaces"
+{
+#RTRANS  6250  { }  200
+#TRANS	6250	{}	200.00
+#TRANS 1910 {} -200.00
+}
+#VER A 7 20080107 "No copy, next row is a real row"
+{
+#RTRANS 6250 {} 700.00
+#TRANS 1910 {} -700.00
+}
+#VER A 8 20080108 "Unknown label is ignored"
+{
+#RTRANSX 6250 {} 100.00
+#TRANS 6250 {} 100.00
+#TRANS 1910 {} -100.00
+}
+#VER A 9 20080109 "Back-to-back RTRANS rows"
+{
+#TRANS 1910 {} -30.00
+#RTRANS 6250 {} 10.00
+#RTRANS 6250 {} 20.00
+#TRANS 6250 {} 20.00
+}
+#VER A 10 20080110 "Quoted account in RTRANS"
+{
+#TRANS 1910 {} -15.00
+#RTRANS "6250" {} 15.00
+#TRANS 6250 {} 15.00
+}
+#VER A 11 20080111 "Quoted amounts"
+{
+#TRANS 1910 {} "-25.00"
+#BTRANS 6110 {} "25.00"
+#RTRANS 6250 {} "25.00"
+#TRANS 6250 {} 25.00
+}
+#VER A 12 20080112 "Quoted account in RTRANS and its copy"
+{
+#TRANS 1910 {} -35.00
+#RTRANS "6250" {} 35.00
+#TRANS "6250" {} 35.00
+}
+#VER A 13 20080113 "Quoted copy, then an identical real row"
+{
+#RTRANS 6250 {} 40.00
+#TRANS "6250" {} 40.00
+#TRANS "6250" {} 40.00
+#TRANS 1910 {} -80.00
+}
+#VER A 14 20080114 "Brace inside a quoted object ID"
+{
+#BTRANS 6110 {1 "A}B"} 800.00
+#RTRANS 6250 {1 "A}B"} 50.00
+#TRANS 6250 {1 "A}B"} 50.00
+#TRANS 1910 {} -50.00
+}
+#VER A 15 20080115 "Object IDs whose quotes do not pair up"
+{
+#TRANS 6110 {1 "C:\"} 100.00
+#TRANS 6110 {1 "a"b"} 100.00
+#TRANS 6110 {1 5"} 100.00
+#TRANS 6110 {1 "A\\"} 100.00 20080115 "ref} 7"
+#RTRANS 6250 {1 "C:\"} 30.00
+#TRANS 6250 {1 "C:\"} 30.00
+#TRANS 1910 {} -430.00
+}
+#VER A 16 20080116 "A } in a quoted object ID before a quote or number"
+{
+#BTRANS 6110 { 1 "A}" } 800.00
+#BTRANS 6110 {1 "A}B} 100 C"} 700.00
+#RTRANS 6250 {1 "A}" 2 "B"} 60.00
+#TRANS 6250 {1 "A}" 2 "B"} 60.00
+#TRANS 6110 {1 "A} 100" 2 "B"} 40.00
+#TRANS 1910 {} -100.00
+}

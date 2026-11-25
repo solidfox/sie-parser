@@ -107,12 +107,24 @@ class SieAccount:
 
 @dataclass
 class SieEntry:
-    """Represents an entry in the SIE file."""
+    """Represents a transaction row (#TRANS, #RTRANS or #BTRANS) in the SIE file.
+
+    ``record_type`` is the SIE label the row came from:
+    - ``"TRANS"``: normal transaction row.
+    - ``"RTRANS"``: supplementary row (added after the voucher was first
+      registered). It counts toward the voucher like a normal row; the
+      ``#TRANS`` copy that immediately follows it (same account and amount)
+      is skipped, and the row takes that copy's account spelling (quoted or
+      not), so account totals match readers that only count ``#TRANS``.
+    - ``"BTRANS"``: removed row. It never counts toward the voucher and is
+      stored in ``SieFile.removed_entries``, not ``SieFile.entries``.
+    """
     date: str
     account_number: str
     amount: float
     description: str
     voucher_index: Optional[str] = None
+    record_type: str = "TRANS"
 
 
 @dataclass
@@ -167,13 +179,14 @@ class SieFile:
     
     # Data collections
     accounts: Dict[str, SieAccount] = field(default_factory=dict)
-    entries: List[SieEntry] = field(default_factory=list)
+    entries: List[SieEntry] = field(default_factory=list)  # #TRANS and #RTRANS rows
     opening_balances: List[SieBalance] = field(default_factory=list)
     closing_balances: List[SieBalance] = field(default_factory=list)
     result_balances: List[SieBalance] = field(default_factory=list)
     dimensions: Dict[str, SieDimension] = field(default_factory=dict)
     objects: Dict[str, SieObject] = field(default_factory=dict)
     metadata: Dict[str, str] = field(default_factory=dict)
+    removed_entries: List[SieEntry] = field(default_factory=list)  # #BTRANS rows
 
 
 # Utility Functions
@@ -271,6 +284,44 @@ def _extract_quoted_value(line: str) -> str:
 
 
 # Main Parser Functions
+def _amount_token(token: str) -> str:
+    """The amount field without surrounding quotes. Only a matched pair is removed."""
+    if len(token) >= 2 and token[0] == token[-1] == '"':
+        return token[1:-1]
+    return token
+
+
+def _closing_brace_outside_quotes(rest: str) -> int:
+    """Index of the '}' that ends the object list at the start of ``rest``, or -1.
+
+    Quotes are tracked as in the spec: a '"' preceded by a backslash is part of
+    the text. The brace counts only if an amount follows it and every quote on
+    the line is closed; otherwise the line is malformed and -1 is returned.
+    """
+    in_quotes = False
+    brace_end = -1
+    for i, ch in enumerate(rest):
+        if ch == '"' and rest[i - 1] != '\\':
+            in_quotes = not in_quotes
+        elif ch == '}' and not in_quotes and brace_end == -1:
+            brace_end = i
+    if in_quotes or brace_end == -1 or not _starts_with_amount(rest[brace_end + 1:]):
+        return -1
+    return brace_end
+
+
+def _starts_with_amount(fields: str) -> bool:
+    """True if the first field (the amount of a transaction row) is missing or a number."""
+    tokens = fields.split()
+    if not tokens or tokens[0] == '{}':
+        return True
+    try:
+        float(_amount_token(tokens[0]).replace(',', '.'))
+        return True
+    except ValueError:
+        return False
+
+
 def parse_sie(file: TextIO) -> SieFile:
     """
     Parse a SIE file and return structured data.
@@ -294,6 +345,8 @@ def parse_sie(file: TextIO) -> SieFile:
     lines = content.splitlines()
     current_voucher = None
     in_voucher_block = False
+    # The #RTRANS entry on the previous non-empty line, else None
+    last_rtrans: Optional[SieEntry] = None
     
     # Store KTYP records for deferred processing
     ktyp_records = {}
@@ -306,6 +359,8 @@ def parse_sie(file: TextIO) -> SieFile:
         line = line.strip()
         if not line:
             continue
+        prev_rtrans = last_rtrans
+        last_rtrans = None
             
         try:
             # Handle voucher block delimiters
@@ -497,20 +552,29 @@ def parse_sie(file: TextIO) -> SieFile:
                             'date': parts[3],            # Date
                             'description': description
                         }
-            elif line.startswith('#TRANS'):
-                # Transaction within a voucher - only process if we're in a voucher block and have a current voucher
+            elif line.split(None, 1)[0] in ('#TRANS', '#RTRANS', '#BTRANS'):
+                # Transaction rows - only process if we're in a voucher block and have a current voucher.
+                # Per SIE 4B, an #RTRANS row is immediately followed by an identical #TRANS
+                # copy for older readers; we keep the #RTRANS row and skip that copy so the
+                # row is not counted twice. #BTRANS rows are removed rows: they never count
+                # toward the voucher and go to removed_entries instead of entries.
                 if in_voucher_block and current_voucher:
                     # Parse transaction line according to SIE specification:
                     # Format: #TRANS account no {object list} amount transdate transtext quantity sign
-                    parts = line.split(' ', 2)  # Split into #TRANS, account, and rest
+                    parts = line.split(None, 2)  # Split into label, account, and rest
                     if len(parts) >= 3:
                         account_number = parts[1]
                         rest = parts[2].strip()
                         
                         # Find the object list (between { and })
                         if rest.startswith('{'):
-                            # Find the closing brace
+                            # Find the closing brace. The first '}' ends the list unless no
+                            # amount follows it: then it was inside a quoted object ID.
                             brace_end = rest.find('}')
+                            if brace_end != -1 and not _starts_with_amount(rest[brace_end + 1:]):
+                                quoted_end = _closing_brace_outside_quotes(rest)
+                                if quoted_end != -1:
+                                    brace_end = quoted_end
                             if brace_end != -1:
                                 object_list = rest[1:brace_end]  # Extract content between braces
                                 remaining = rest[brace_end + 1:].strip()
@@ -527,8 +591,8 @@ def parse_sie(file: TextIO) -> SieFile:
                         remaining_parts = remaining.split()
                         amount = 0.0
                         if remaining_parts:
-                            amount_str = remaining_parts[0]
-                            if amount_str and amount_str != '{}':
+                            amount_str = _amount_token(remaining_parts[0])  # SIE fields may be quoted
+                            if amount_str != '{}':
                                 amount = float(amount_str.replace(',', '.'))
                         
                         # Create entry (we store object_list for future use but don't parse it fully yet)
@@ -537,9 +601,23 @@ def parse_sie(file: TextIO) -> SieFile:
                             account_number=account_number,
                             amount=amount,
                             description=current_voucher['description'],
-                            voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}"
+                            voucher_index=f"{current_voucher['voucher_series']}{current_voucher['voucher_index']}",
+                            record_type=parts[0][1:],  # "TRANS", "RTRANS" or "BTRANS"
                         )
-                        sie_file.entries.append(entry)
+                        if (entry.record_type == 'TRANS' and prev_rtrans is not None
+                                and prev_rtrans.amount == amount
+                                and prev_rtrans.account_number.strip('"') == account_number.strip('"')):
+                            # Backward-compatibility copy of the preceding #RTRANS (either may be
+                            # quoted). Skip it, but keep its account spelling: that is what was
+                            # counted before #RTRANS was supported.
+                            prev_rtrans.account_number = account_number
+                            continue
+                        if entry.record_type == 'RTRANS':
+                            last_rtrans = entry
+                        if entry.record_type == 'BTRANS':
+                            sie_file.removed_entries.append(entry)
+                        else:
+                            sie_file.entries.append(entry)
                         
         except (ValueError, IndexError) as e:
             raise SieParseError(f"Error parsing line: {str(e)}", line_num, line)
